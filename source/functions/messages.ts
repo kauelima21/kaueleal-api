@@ -26,5 +26,5 @@ export async function postHandler(event: APIGatewayProxyEventV2) {
 
   await message.save();
 
-  return httpResponse(201);
+  return httpResponse(201, null);
 }
