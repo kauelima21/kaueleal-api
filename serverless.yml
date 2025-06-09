@@ -3,6 +3,7 @@ service: kaueleal-api
 
 plugins:
   - serverless-iam-roles-per-function
+  - serverless-dotenv-plugin
 
 provider:
   name: aws
@@ -43,6 +44,30 @@ functions:
           - dynamodb:PutItem
         Resource: !GetAtt MessagesTable.Arn
 
+  processStreams:
+    name: process_streams_${self:provider.stage}
+    handler: source/functions/processStreams.handler
+    events:
+      - stream:
+          type: dynamodb
+          arn: !GetAtt MessagesTable.StreamArn
+          batchSize: 5
+          maximumRetryAttempts: 2
+          destinations:
+            onFailure:
+              type: sqs
+              arn: !GetAtt DynamDBStreamsDQL.Arn
+    iamRoleStatementsName: process_streams_${self:provider.stage}_role
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - sqs:SendMessage
+        Resource: !GetAtt DynamDBStreamsDQL.Arn
+      - Effect: Allow
+        Action:
+          - ses:SendEmail
+        Resource: '*'
+
 resources:
   Resources:
     MessagesTable:
@@ -56,6 +81,14 @@ resources:
         KeySchema:
           - AttributeName: id
             KeyType: HASH
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE
+
+    DynamDBStreamsDQL:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: DynamDBStreamsDQL
+        MessageRetentionPeriod: 1209600 # 14 days
 
     ApiGatewayUsagePlan:
       Type: AWS::ApiGateway::UsagePlan
